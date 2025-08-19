@@ -11,16 +11,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
-      --paper: #FAF7F2;
-      --ink: #111111;
-      --accent: #C9A227;
+      --paper: #FAF7F2; --ink: #111111; --accent: #C9A227;
     }
     html, body { background: var(--paper); color: var(--ink); }
     body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
     .card { box-shadow: 0 10px 25px rgba(0,0,0,.07); }
-    .gold-grad {
-      background: radial-gradient(1200px 300px at 50% -50px, rgba(201,162,39,.25), rgba(201,162,39,0) 60%);
-    }
+    .gold-grad { background: radial-gradient(1200px 300px at 50% -50px, rgba(201,162,39,.25), rgba(201,162,39,0) 60%); }
     .badge { background: rgba(201,162,39,.12); color: var(--ink); border: 1px solid rgba(201,162,39,.35); }
     .btn-primary { background: var(--ink); color: white; }
     .btn-primary:hover { opacity: .95; }
@@ -29,6 +25,8 @@
     .lightbox-inner { max-width: 95vw; max-height: 90vh; }
     .lightbox img, .lightbox video { max-width: 95vw; max-height: 90vh; object-fit: contain; border-radius: 12px; }
     .close-btn { position: fixed; top: 12px; right: 12px; background: rgba(255,255,255,.15); color: #fff; border-radius: 9999px; padding: 10px 14px; font-weight: 700; }
+    .trash-btn { position:absolute; top:8px; right:8px; background: rgba(0,0,0,.55); color:#fff; border-radius:8px; padding:4px 6px; font-size:12px; display:none; }
+    .admin-on .trash-btn { display:block; }
   </style>
 </head>
 <body class="min-h-screen gold-grad">
@@ -37,12 +35,10 @@
     <header class="text-center mb-8">
       <div class="mx-auto w-28 h-28 rounded-full border-2" style="border-color: var(--accent); display:grid; place-items:center;">
         <svg width="72" height="72" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <defs>
-            <linearGradient id="g" x1="0" x2="1">
-              <stop offset="0%" stop-color="#C9A227" stop-opacity=".95"/>
-              <stop offset="100%" stop-color="#C9A227" stop-opacity=".65"/>
-            </linearGradient>
-          </defs>
+          <defs><linearGradient id="g" x1="0" x2="1">
+            <stop offset="0%" stop-color="#C9A227" stop-opacity=".95"/>
+            <stop offset="100%" stop-color="#C9A227" stop-opacity=".65"/>
+          </linearGradient></defs>
           <text x="16" y="42" font-family="Playfair Display, serif" font-weight="700" font-size="28" fill="url(#g)">E</text>
           <text x="44" y="42" font-family="Playfair Display, serif" font-weight="700" font-size="28" fill="url(#g)">D</text>
           <path d="M36 26c2.6-4.3 9-4.2 11.4-.1 2 3.2.7 7.6-2.2 10.2L36 45 26.8 36.1c-3-2.6-4.2-7.1-2.3-10.3 2.3-4.1 8.7-4.2 11.5.2z" fill="#C9A227" fill-opacity=".35"/>
@@ -52,6 +48,12 @@
       <p class="text-slate-600 mt-1">August 23, 2025</p>
       <div class="inline-block px-3 py-1 rounded-full text-xs mt-2 badge">Share your favorite moments with us 💛</div>
     </header>
+
+    <!-- ADMIN BAR -->
+    <div class="flex items-center justify-end gap-2 mb-3">
+      <button id="adminToggle" class="text-xs underline">Admin mode</button>
+      <span id="adminStatus" class="text-xs text-slate-500"></span>
+    </div>
 
     <!-- HOW TO -->
     <section class="bg-white rounded-2xl p-6 md:p-7 card mb-8">
@@ -64,11 +66,9 @@
       </ol>
     </section>
 
-    <!-- UPLOAD (no passcode field) -->
+    <!-- UPLOAD -->
     <section class="bg-white rounded-2xl p-6 md:p-7 card">
-      <h2 class="text-xl font-semibold flex items-center gap-2">
-        <span>Upload photos & videos</span>
-      </h2>
+      <h2 class="text-xl font-semibold">Upload photos & videos</h2>
       <p class="text-slate-600 mt-1 text-sm">Max 200 MB each • JPG/PNG/HEIC/WEBP/MP4/MOV.</p>
 
       <form id="uploadForm" class="mt-4 grid gap-3">
@@ -113,7 +113,7 @@
     </footer>
   </main>
 
-  <!-- LIGHTBOX OVERLAY -->
+  <!-- LIGHTBOX -->
   <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Media viewer">
     <button id="closeLightbox" class="close-btn" aria-label="Close">✕</button>
     <div class="lightbox-inner">
@@ -133,6 +133,27 @@ const progressText = document.getElementById('progressText');
 const progressLabel= document.getElementById('progressLabel');
 const submitBtn    = document.getElementById('submitBtn');
 const fileInput    = document.getElementById('file');
+
+let adminPin = "";
+let adminOn = false;
+
+document.getElementById('adminToggle').addEventListener('click', async () => {
+  if (!adminOn) {
+    const pin = prompt("Enter admin PIN");
+    if (!pin) return;
+    // simple trial delete call with empty key to validate (backend will just 400/401)
+    const res = await fetch(WORKER_BASE + "/api/list"); // minimal check: rely on 401 on delete later
+    adminPin = pin;
+    adminOn = true;
+    document.body.classList.add('admin-on');
+    document.getElementById('adminStatus').textContent = "Admin mode ON";
+  } else {
+    adminOn = false;
+    adminPin = "";
+    document.body.classList.remove('admin-on');
+    document.getElementById('adminStatus').textContent = "";
+  }
+});
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -194,7 +215,7 @@ async function loadGallery(){
     (items || []).forEach(it => {
       const type = (it.contentType || '').split('/')[0];
       const card = document.createElement('div');
-      card.className = 'bg-white rounded-xl card overflow-hidden cursor-zoom-in';
+      card.className = 'relative bg-white rounded-xl card overflow-hidden' + (adminOn ? ' admin-on' : '');
       let el;
       if (type === 'video') {
         el = document.createElement('video');
@@ -205,7 +226,7 @@ async function loadGallery(){
       } else {
         el = document.createElement('img');
         el.src = it.url; el.alt = it.name || 'Upload'; el.loading='lazy';
-        el.className = 'w-full h-48 object-cover';
+        el.className = 'w-full h-48 object-cover cursor-zoom-in';
         el.addEventListener('click', () => openLightbox('image', it.url));
         card.appendChild(el);
       }
@@ -214,6 +235,29 @@ async function loadGallery(){
       const date = new Date(it.uploadedAt);
       meta.innerHTML = "<span>" + (it.uploader || 'Guest') + "</span><span>" + (isNaN(date) ? '' : date.toLocaleString()) + "</span>";
       card.appendChild(meta);
+
+      // delete button (shown in admin mode)
+      const del = document.createElement('button');
+      del.textContent = "Delete";
+      del.className = 'trash-btn';
+      del.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        if (!adminOn) return;
+        if (!adminPin) { alert("Admin PIN required"); return; }
+        if (!confirm("Delete this item?")) return;
+        const r = await fetch(WORKER_BASE + '/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: it.key, pin: adminPin })
+        });
+        if (r.ok) { card.remove(); }
+        else {
+          const t = await r.text();
+          alert('Delete failed: ' + t);
+        }
+      });
+      card.appendChild(del);
+
       gallery.appendChild(card);
     });
   }catch(e){ console.error(e); }
@@ -238,13 +282,7 @@ function openLightbox(kind, src) {
   lb.classList.add('open');
   document.body.style.overflow = 'hidden';
 }
-
-function closeLightbox() {
-  lb.classList.remove('open');
-  document.body.style.overflow = '';
-  lbVid.pause();
-}
-
+function closeLightbox() { lb.classList.remove('open'); document.body.style.overflow = ''; lbVid.pause(); }
 lb.addEventListener('click', (e) => { if (e.target === lb) closeLightbox(); });
 lbClose.addEventListener('click', closeLightbox);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
