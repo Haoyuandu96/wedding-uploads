@@ -73,7 +73,7 @@
 
       <form id="uploadForm" class="mt-4 grid gap-3">
         <div class="grid md:grid-cols-3 gap-3">
-          <input name="name" required placeholder="Your name" class="border rounded-xl px-4 py-3 focus:outline-none focus:ring w-full"/>
+          <input name="name" id="guestName" required placeholder="Your name" class="border rounded-xl px-4 py-3 focus:outline-none focus:ring w-full"/ autocomplete="name">
           <div class="grid gap-2 md:col-span-2">
             <label class="text-xs text-slate-600">Select files</label>
             <input id="file" name="file" type="file" multiple accept="image/*,video/*" required class="border rounded-xl px-4 py-3 focus:outline-none focus:ring w-full"/>
@@ -286,6 +286,59 @@ function closeLightbox() { lb.classList.remove('open'); document.body.style.over
 lb.addEventListener('click', (e) => { if (e.target === lb) closeLightbox(); });
 lbClose.addEventListener('click', closeLightbox);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+</script>
+<script>
+(function(){
+  const KEY = 'weddingUploads.guestName';
+  const form = document.getElementById('uploadForm');
+  const nameInput = document.getElementById('guestName') || document.querySelector('input[name="name"]');
+
+  if (!form || !nameInput) return;
+
+  function getSaved(){ try { return (localStorage.getItem(KEY) || '').trim(); } catch(e){ return ''; } }
+  function save(n){ try { if (n) localStorage.setItem(KEY, n); } catch(e){} }
+  function applySaved(){
+    const s = getSaved();
+    if (s && (!nameInput.value || nameInput.value.trim() === '')) {
+      nameInput.value = s;
+    }
+  }
+
+  // On load: prefill
+  applySaved();
+
+  // When user types/changes, persist
+  function commit(){
+    const n = (nameInput.value || '').trim();
+    if (n) save(n);
+  }
+  nameInput.addEventListener('change', commit);
+  nameInput.addEventListener('blur', commit);
+  nameInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') commit(); });
+
+  // Before submit: if empty but saved exists, fill it
+  form.addEventListener('submit', () => {
+    if (!nameInput.value.trim()) {
+      const s = getSaved(); if (s) nameInput.value = s;
+    } else {
+      commit();
+    }
+  });
+
+  // After form.reset(): re-apply saved name (reset fires an event)
+  form.addEventListener('reset', () => {
+    setTimeout(applySaved, 0);
+  });
+
+  // Expose helper consistent with previous instructions (non-breaking)
+  window.getUploaderName = function(){
+    const typed = (nameInput.value || '').trim();
+    const s = getSaved();
+    const n = typed || s;
+    if (n) save(n);
+    return n;
+  };
+})();
 </script>
 </body>
 </html>
