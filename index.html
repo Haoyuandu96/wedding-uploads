@@ -24,15 +24,18 @@
     .badge { background: rgba(201,162,39,.12); color: var(--ink); border: 1px solid rgba(201,162,39,.35); }
     .btn-primary { background: var(--ink); color: white; }
     .btn-primary:hover { opacity: .95; }
-    .dropzone { border: 2px dashed rgba(0,0,0,.2); }
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; z-index: 50; }
+    .lightbox.open { display: flex; }
+    .lightbox-inner { max-width: 95vw; max-height: 90vh; }
+    .lightbox img, .lightbox video { max-width: 95vw; max-height: 90vh; object-fit: contain; border-radius: 12px; }
+    .close-btn { position: fixed; top: 12px; right: 12px; background: rgba(255,255,255,.15); color: #fff; border-radius: 9999px; padding: 10px 14px; font-weight: 700; }
   </style>
 </head>
 <body class="min-h-screen gold-grad">
   <main class="max-w-5xl mx-auto px-4 py-8 md:py-10">
-    <!-- HERO with monogram -->
+    <!-- HERO -->
     <header class="text-center mb-8">
       <div class="mx-auto w-28 h-28 rounded-full border-2" style="border-color: var(--accent); display:grid; place-items:center;">
-        <!-- Monogram: E ♥ D -->
         <svg width="72" height="72" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <defs>
             <linearGradient id="g" x1="0" x2="1">
@@ -55,24 +58,23 @@
       <h2 class="text-lg font-semibold mb-2">How to upload</h2>
       <ol class="list-decimal pl-5 space-y-1 text-slate-700 text-sm">
         <li>Tap <b>Select files</b> and choose photos/videos (you can select multiple).</li>
-        <li>Enter your <b>name</b> and the <b>passcode</b> from the program.</li>
-        <li>Press <b>Upload selected</b> and keep this tab open until it says “Upload complete”.</li>
+        <li>Enter your <b>name</b>, then press <b>Upload selected</b>.</li>
+        <li>Keep this tab open until it says “Upload complete”.</li>
         <li>Your items appear below in the live gallery. Thank you! 🥂</li>
       </ol>
     </section>
 
-    <!-- UPLOAD -->
+    <!-- UPLOAD (no passcode field) -->
     <section class="bg-white rounded-2xl p-6 md:p-7 card">
       <h2 class="text-xl font-semibold flex items-center gap-2">
         <span>Upload photos & videos</span>
       </h2>
-      <p class="text-slate-600 mt-1 text-sm">Max 200 MB each • JPG/PNG/HEIC/WEBP/MP4/MOV • Use the passcode on the program.</p>
+      <p class="text-slate-600 mt-1 text-sm">Max 200 MB each • JPG/PNG/HEIC/WEBP/MP4/MOV.</p>
 
       <form id="uploadForm" class="mt-4 grid gap-3">
         <div class="grid md:grid-cols-3 gap-3">
           <input name="name" required placeholder="Your name" class="border rounded-xl px-4 py-3 focus:outline-none focus:ring w-full"/>
-          <input name="passcode" required placeholder="Passcode" class="border rounded-xl px-4 py-3 focus:outline-none focus:ring w-full"/>
-          <div class="grid gap-2">
+          <div class="grid gap-2 md:col-span-2">
             <label class="text-xs text-slate-600">Select files</label>
             <input id="file" name="file" type="file" multiple accept="image/*,video/*" required class="border rounded-xl px-4 py-3 focus:outline-none focus:ring w-full"/>
           </div>
@@ -106,10 +108,19 @@
     </section>
 
     <footer class="text-center text-slate-500 text-xs mt-10">
-      <p>Please keep content family‑friendly. By uploading you grant us permission to share privately with our guests.</p>
+      <p>Please keep content family‑friendly. Do not upload others without consent.</p>
       <p class="mt-1">© 2025 Eric & Darya</p>
     </footer>
   </main>
+
+  <!-- LIGHTBOX OVERLAY -->
+  <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Media viewer">
+    <button id="closeLightbox" class="close-btn" aria-label="Close">✕</button>
+    <div class="lightbox-inner">
+      <img id="lightboxImg" alt="Zoomed image" style="display:none"/>
+      <video id="lightboxVideo" controls playsinline style="display:none"></video>
+    </div>
+  </div>
 
 <script>
 const WORKER_BASE = "https://broken-tree-9fda.haoyuandu96.workers.dev";
@@ -183,17 +194,20 @@ async function loadGallery(){
     (items || []).forEach(it => {
       const type = (it.contentType || '').split('/')[0];
       const card = document.createElement('div');
-      card.className = 'bg-white rounded-xl card overflow-hidden';
+      card.className = 'bg-white rounded-xl card overflow-hidden cursor-zoom-in';
+      let el;
       if (type === 'video') {
-        const v = document.createElement('video');
-        v.src = it.url; v.controls = true; v.playsInline = true;
-        v.className = 'w-full h-48 object-cover';
-        card.appendChild(v);
+        el = document.createElement('video');
+        el.src = it.url; el.controls = true; el.playsInline = true;
+        el.className = 'w-full h-48 object-cover';
+        el.addEventListener('click', () => openLightbox('video', it.url));
+        card.appendChild(el);
       } else {
-        const img = document.createElement('img');
-        img.src = it.url; img.alt = it.name || 'Upload'; img.loading='lazy';
-        img.className = 'w-full h-48 object-cover';
-        card.appendChild(img);
+        el = document.createElement('img');
+        el.src = it.url; el.alt = it.name || 'Upload'; el.loading='lazy';
+        el.className = 'w-full h-48 object-cover';
+        el.addEventListener('click', () => openLightbox('image', it.url));
+        card.appendChild(el);
       }
       const meta = document.createElement('div');
       meta.className = 'p-3 text-sm text-slate-600 flex items-center justify-between';
@@ -206,6 +220,34 @@ async function loadGallery(){
 }
 document.getElementById('refreshBtn').addEventListener('click', loadGallery);
 loadGallery();
+
+// Lightbox logic
+const lb = document.getElementById('lightbox');
+const lbImg = document.getElementById('lightboxImg');
+const lbVid = document.getElementById('lightboxVideo');
+const lbClose = document.getElementById('closeLightbox');
+
+function openLightbox(kind, src) {
+  if (kind === 'image') {
+    lbVid.pause(); lbVid.style.display = 'none';
+    lbImg.src = src; lbImg.style.display = 'block';
+  } else {
+    lbImg.style.display = 'none';
+    lbVid.src = src; lbVid.style.display = 'block';
+  }
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  lb.classList.remove('open');
+  document.body.style.overflow = '';
+  lbVid.pause();
+}
+
+lb.addEventListener('click', (e) => { if (e.target === lb) closeLightbox(); });
+lbClose.addEventListener('click', closeLightbox);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
 </script>
 </body>
 </html>
